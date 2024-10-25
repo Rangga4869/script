@@ -62,17 +62,8 @@ Write-Host "Mohon tunggu, sedang pengecekan user password credential"
 $psExecPath = "C:\Runas\psexec.exe"
 $credentials = @(
     # List of credentials in the format: username,password
-    "mdsladmin,S3cr3tP@ssw0rd",
-    "mdsladmin,Matahari1",
-    "mdsladmin,Matahari123",
     "mdsadm,mds901",
-    "mdsadm,itsd901",
-    "mdsadm,itss901",
-    "mdsadm,P@ssw0rd901",
-    "mdsadm,Matahari1",
-    "mdsadm,Matahari123",
-    "mdsadmin,mds901"
-    "matahari\sam104358,Vermouth09"
+
 )
     
 # Arrays to store successful and unsuccessful credentials
