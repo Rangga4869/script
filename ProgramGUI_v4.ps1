@@ -1313,29 +1313,39 @@ $Teams.Add_Click(
             
 $Office.Add_Click( 
     {
-        clear-host
-        Show-Copyright
-        
-        $Apps = 'Install Microsoft Office 2013 for 64bit'
-        $Driver = 'Office2013.zip'
-        $Driver2 = 'setup.exe'
-        $Linkoffice = "http://yourdownloadlink.com/Office2013.zip" # Replace with actual download link
-        $FileFolder = "C:\YourDownloadFolder" # Replace with your actual folder path
-        
-        # Show popup for download instructions
-        [System.Windows.Forms.MessageBox]::Show("Please download the file from the link: $Linkoffice. Click OK to proceed to the download.", "Download Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-        
-        Write-Host "Please wait, downloading file" $Apps "size file : 667.54 MB"
-        Invoke-WebRequest -Uri $Linkoffice -OutFile "$FileFolder\$Driver"
-        
-        Write-Host "Download" $Apps "Successful. Proceeding to run" $Apps
-        Expand-Archive -Path "$FileFolder\$Driver" -DestinationPath "$FileFolder\Office2013"
-        
-        # Start the setup process with confirmation
-        [System.Windows.Forms.MessageBox]::Show("Download complete. Starting installation process.", "Installation Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-        Start-Process -FilePath "$FileFolder\Office2013\$Driver2" -WorkingDirectory "$FileFolder\Office2013" -Wait
-        
-        Show-Footer
+        # Clear the host console and show copyright information
+Clear-Host
+Show-Copyright
+
+# Define variables for application, driver, and download link
+$Apps = 'Install Microsoft Office 2013 for 64bit'
+$Driver = 'Office2013.zip'
+$Driver2 = 'setup.exe'
+$Linkoffice = "http://yourdownloadlink.com/Office2013.zip" # Replace with actual download link
+$FileFolder = "C:\YourDownloadFolder" # Replace with your actual folder path
+
+# Show popup for download instructions with clickable link
+$instructionMessage = "Please download the file from the link: `"$Linkoffice`". Click OK to proceed with the download."
+[System.Windows.Forms.MessageBox]::Show($instructionMessage, "Download Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+
+# Open the link in the default web browser
+Start-Process "mshta.exe" "javascript:var sh=new ActiveXObject('WScript.Shell'); sh.run('$Linkoffice');close()"
+
+# Notify the user of the download progress
+Write-Host "Please wait, downloading file" $Apps "size file : 667.54 MB"
+Invoke-WebRequest -Uri $Linkoffice -OutFile "$FileFolder\$Driver"
+
+# Notify user of successful download and proceed to run the application
+Write-Host "Download" $Apps "Successful. Proceeding to run" $Apps
+Expand-Archive -Path "$FileFolder\$Driver" -DestinationPath "$FileFolder\Office2013"
+
+# Start the setup process with confirmation
+[System.Windows.Forms.MessageBox]::Show("Download complete. Starting installation process.", "Installation Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+Start-Process -FilePath "$FileFolder\Office2013\$Driver2" -WorkingDirectory "$FileFolder\Office2013" -Wait
+
+# Show footer information
+Show-Footer
+
     } )
             
 $PdfOwnGuard.Add_Click( 
