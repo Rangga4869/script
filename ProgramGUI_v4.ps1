@@ -1315,15 +1315,27 @@ $Office.Add_Click(
     {
         clear-host
         Show-Copyright
+        
         $Apps = 'Install Microsoft Office 2013 for 64bit'
         $Driver = 'Office2013.zip'
         $Driver2 = 'setup.exe'
-            Write-Host "Mohon tunggu, file sedang di download " $Apps "size file : 667.54 MB" 
-            invoke-webrequest -uri $Linkoffice -outfile $FileFolder\$Driver
-            Write-Host "Download" $Apps "Success. Mohon tunggu, sedang proses menjalankan file" $Apps
-            expand-archive -path $FileFolder\$Driver $FileFolder\Office2013
-            start-process -FilePath $Driver2 -WorkingDirectory $FileFolder\Office2013 -wait
-            Show-Footer
+        $Linkoffice = "http://yourdownloadlink.com/Office2013.zip" # Replace with actual download link
+        $FileFolder = "C:\YourDownloadFolder" # Replace with your actual folder path
+        
+        # Show popup for download instructions
+        [System.Windows.Forms.MessageBox]::Show("Please download the file from the link: $Linkoffice. Click OK to proceed to the download.", "Download Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        
+        Write-Host "Please wait, downloading file" $Apps "size file : 667.54 MB"
+        Invoke-WebRequest -Uri $Linkoffice -OutFile "$FileFolder\$Driver"
+        
+        Write-Host "Download" $Apps "Successful. Proceeding to run" $Apps
+        Expand-Archive -Path "$FileFolder\$Driver" -DestinationPath "$FileFolder\Office2013"
+        
+        # Start the setup process with confirmation
+        [System.Windows.Forms.MessageBox]::Show("Download complete. Starting installation process.", "Installation Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        Start-Process -FilePath "$FileFolder\Office2013\$Driver2" -WorkingDirectory "$FileFolder\Office2013" -Wait
+        
+        Show-Footer
     } )
             
 $PdfOwnGuard.Add_Click( 
