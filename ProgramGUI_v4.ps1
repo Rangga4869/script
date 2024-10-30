@@ -7,6 +7,18 @@ $EnableEdgePDFTakeover.Location = New-Object System.Drawing.Point(155, 260)
 #>
 
 #This will self elevate the script so with a UAC prompt since this script needs to be run as an Administrator in order to function properly.
+function Download-AndExecute {
+    param($url, $outputFile)
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $outputFile -UseBasicParsing
+        return $true
+    }
+    catch {
+        Write-Host "Gagal mengunduh file dari: $url"
+        Write-Host "Error: $_"
+        return $false
+    }
+}
 
 $ErrorActionPreference = 'SilentlyContinue'
 $fileFolder = "D:\SourceIT"
@@ -38,17 +50,17 @@ if (-Not (Test-Path -Path $fileFolder -PathType Container)) {
 } 
 
 Write-Host "Mohon tunggu, process verifikasi sedang berjalan....."
-remove-item "c:\Users\MDSLADMIN\AppData\Roaming\4869\ProgramGUI_v2.ps1" -force
-remove-item "c:\Users\MDSADM\AppData\Roaming\4869\ProgramGUI_v2.ps1" -force
-$folderPath_4869 = where.exe /r c:\users ProgramGUI_v3.ps1
-remove-item $folderPath_4869 -force
-$folderPath_4869 = where.exe /r c:\users JacktheRipper*.bat
-remove-item $folderPath_4869 -force
+# Get active user from quser and clean up the username
+$activeUser = (quser | Where-Object { $_ -match 'Active' }) -split '\s+' | 
+    Where-Object { $_ -and $_ -ne 'Active' } | 
+    Select-Object -First 1 | 
+    ForEach-Object { $_ -replace '^>', '' }  # Remove the '>' character
 
-$folderPath = where.exe /r c:\users ProgramGUI*.ps1
-$Loc_Appdata = ($folderPath -split "\\Roaming\\")[0]
-$Loc_Roaming = ($folderPath -split "4869")[0]
-$Loc_users = ($folderPath -split "\\Appdata\\")[0]
+Write-Host "Active user: $activeUser"
+
+$loc_Roaming = "C:\Users\$activeUser\AppData\Roaming"
+$Loc_Appdata = "C:\Users\$activeUser\AppData"
+$Loc_users = "C:\Users\$activeUser"
 
 if (-Not (Test-Path -Path "$Loc_users\desktop" -PathType Container)) {
     $Loc_users = "$loc_users\OneDrive - PT Matahari Department Store, Tbk\Desktop"
@@ -58,9 +70,6 @@ else {
 }
 write-host $loc_users
 
-remove-item "$Loc_Roaming\4869\JacktheRipper.bat" -force
-remove-item "$Loc_Roaming\4869\ProgramGUI_V3.ps1" -force
-
 Remove-Item -LiteralPath "c:\runas" -Force -Recurse
 Remove-Item -LiteralPath "c:\tmp" -Force -Recurse
 New-Item "c:\tmp" -itemType Directory -ErrorAction Ignore -Force
@@ -69,8 +78,8 @@ $folder.Attributes = $folder.Attributes -bor [System.IO.FileAttributes]::Hidden
 
 #Remove File temp and add user mdsluser
 Remove-Item -Path "$env:TEMP\*" -Recurse -Force
-cmd.exe /c net user mdsluser Matahari123
 cmd.exe /c net localgroup administrators mdsadm /delete
+cmd.exe net localgroup administrators "IT - SAM" /add
 cmd.exe /c net accounts /maxpwage:unlimited
 
 #Copyright
@@ -142,71 +151,84 @@ Show-Header
 
 #Proses Download LSAgent & VNC Server
 Write-Host "Mohon tunggu proses sedang berjalan...."
-invoke-webrequest -uri "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21154&authkey=AFq1WX8j_LtqEcg&download=1" -outfile c:\tmp\hosts
+$hostsUrl = "https://raw.githubusercontent.com/Rangga4869/script/refs/heads/main/hosts"
+if (-not (Download-AndExecute -url $hostsUrl -outputFile "c:\tmp\hosts")) {
+    $downloadSuccess = $false
+}
 Copy-Item -Path "C:\tmp\hosts*" -Destination "C:\Windows\System32\drivers\etc\"  -Recurse
 
 $lsagent = Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* | Select-Object DisplayName | Where-Object { $_.DisplayName -like "lsagent*" }
-if (!$lsagent ) {
-    invoke-webrequest -uri "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21184&authkey=AGS6zWFXxCSick0&download=1" -outfile c:\tmp\LsAgent-windows.exe
+    if (!$lsagent ) {
+        $hostsUrl = "https://raw.githubusercontent.com/Rangga4869/script/refs/heads/main/LsAgent-windows.exe"
+    if (-not (Download-AndExecute -url $hostsUrl -outputFile "c:\tmp\LsAgent-windows.exe")) {
+        $downloadSuccess = $false
+    }
     cmd.exe /c C:\tmp\LsAgent-windows.exe --server ls.matahari.id --port 9524 --agentkey 6ea0a863-9b99-4436-81cf-2174de370d30 --mode unattended
 }
 
-invoke-webrequest -uri "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21161&authkey=AN0hYu0Dc7KZnhg&download=1" -outfile C:\tmp\Tightvnc.msi
+$vncUrl = "https://raw.githubusercontent.com/Rangga4869/script/refs/heads/main/tightvnc.msi"
+if (-not (Download-AndExecute -url $vncUrl -outputFile "C:\tmp\tightvnc.msi")) {
+    $downloadSuccess = $false
+}
 $msiPath = "C:\tmp\tightvnc.msi"
 $msiArgs = "/quiet /norestart ADDLOCAL=`"Server`" VIEWER_ASSOCIATE_VNC_EXTENSION=1 SERVER_REGISTER_AS_SERVICE=1 SERVER_ADD_FIREWALL_EXCEPTION=1 VIEWER_ADD_FIREWALL_EXCEPTION=1 SERVER_ALLOW_SAS=1 SET_USEVNCAUTHENTICATION=1 VALUE_OF_USEVNCAUTHENTICATION=1 SET_PASSWORD=1 VALUE_OF_PASSWORD=matahari SET_USECONTROLAUTHENTICATION=1 VALUE_OF_USECONTROLAUTHENTICATION=1 SET_CONTROLPASSWORD=1 VALUE_OF_CONTROLPASSWORD=matahari SET_REMOVEWALLPAPER=0 VALUE_OF_REMOVEWALLPAPER=0"
 Start-Process -FilePath "C:\Windows\System32\msiexec" -ArgumentList "/i $msiPath $msiArgs" -Wait
 
 #Proses Import regedit
-invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%212188&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile C:\tmp\email.reg
+$emailUrl = "https://raw.githubusercontent.com/Rangga4869/script/refs/heads/main/email.reg"
+if (-not (Download-AndExecute -url $vncUrl -outputFile "C:\tmp\email.reg")) {
+    $downloadSuccess = $false
+}
 reg import C:\tmp\email.reg
 
 
 #Link SOurce Software
-$LinkAdobe = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21127&authkey=AJAVn0JvXt0FnQQ&download=1"
-$Link7zip = "https://www.7-zip.org/a/7z1900-x64.exe"
-$LinkAtt = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21236&authkey=AC_hTXc7voZ0Vfk&download=1"
-$LinkAttendance = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21133&authkey=ALDyuWeilU0fBTg&download=1"
-$LinkTM64 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21121&authkey=AHvBbYpyyx8UJoU&download=1"
+# $LinkAdobe = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21127&authkey=AJAVn0JvXt0FnQQ&download=1"
+$Link7zip = "https://www.7-zip.org/a/7z2408-x64.exe"
+# $LinkAtt = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21236&authkey=AC_hTXc7voZ0Vfk&download=1"
+# $LinkAttendance = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21133&authkey=ALDyuWeilU0fBTg&download=1"
+# $LinkTM64 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21121&authkey=AHvBbYpyyx8UJoU&download=1"
 $LinkChrome = "https://dl.google.com/tag/s/appguid%3D%7B8A69D345-D564-463C-AFF1-A69D9E530F96%7D%26iid%3D%7B9F293A55-20ED-B207-7171-E5BD75424375%7D%26lang%3Den%26browser%3D5%26usagestats%3D1%26appname%3DGoogle%2520Chrome%26needsadmin%3Dprefers%26ap%3Dx64-stable-statsdef_1%26brand%3DUEAD%26installdataindex%3Dempty/update2/installers/ChromeSetup.exe"
-$LinkCleanWipedb = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21125&authkey=AFWoOZFIzXzjye8&download=1"
-$LinkCleanWipeexe = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21124&authkey=AMC9_55tJR4xrRo&download=1"
+# $LinkCleanWipedb = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21125&authkey=AFWoOZFIzXzjye8&download=1"
+# $LinkCleanWipeexe = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21124&authkey=AMC9_55tJR4xrRo&download=1"
 $LinkFirefox = "https://download.mozilla.org/?product=firefox-msi-latest-ssl&os=win64&lang=en-US"
-$LinkForti = "https://onedrive.live.com/download?resid=5924245912399F7%21363&authkey=!AJDEuX2FSYcMnMk&download=1"
-$LinkInode = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21131&authkey=AEAC3gA5F5jgqio&download=1"
-$LinkJava6u29 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21129&authkey=AMYw05CumaCTXsA&download=1"
-$Linkoffice = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21134&authkey=AGRSL5OBL6pMi2E&download=1"
-$Linkpdfownguard = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21132&authkey=AHkpiFXv6ANykrg&download=1"
-$Linkquery64 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21135&authkey=AGyqVmo7Am_UCwI&download=1"
-$Linkbrother = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21137&authkey=ABs5vN8Eqf62kPw&download=1"
-$Linkt220 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21141&authkey=AOOyu0HYPL7DVlk&download=1"
-$Linkt420 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21140&authkey=AClv9JMYeRCKhHk&download=1"
-$Linkl220printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21264&authkey=ALaauWxjNremNz4&download=1"
-$Linkl220scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21265&authkey=AKP0ZjUuZyDhHW0&download=1"
-$Linkl350printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21138&authkey=ACLqQ2t8OAQ1WU0&download=1"
-$Linkl350scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21139&authkey=APPi5TDGARIOphQ&download=1"
-$Linkl360printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21142&authkey=ABHz7hTDSv_AtPI&download=1"
-$Linkl360scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21143&authkey=AP5R0UWNHfeM5P8&download=1"
-$Linkl380printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21170&authkey=AIZyeI81gPcJY7M&download=1"
-$Linkl380scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21171&authkey=ALvDDuXsYFgVgEg&download=1"
-$Linkl405printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21146&authkey=ADn6f6zYSrCoHQM&download=1"
-$Linkl405scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21148&authkey=AHRjDedzWrho3Pg&download=1"
-$Linkl1800 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21144&authkey=AOsE5pO4tuMu5Kc&download=1"
-$Linklq2190 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21145&authkey=ADctuWUn98ds8rE&download=1"
-$Linkrsim = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21149&authkey=AKigCx0ZHZ7iwUM&download=1"
-$Linkrufus = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21147&authkey=ADOAVyS42og_rkQ&download=1"
+$LinkForti = "https://filestore.fortinet.com/forticlient/FortiClientVPNOnlineInstaller.exe"
+# $LinkInode = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21131&authkey=AEAC3gA5F5jgqio&download=1"
+# $LinkJava6u29 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21129&authkey=AMYw05CumaCTXsA&download=1"
+# $Linkoffice = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21134&authkey=AGRSL5OBL6pMi2E&download=1"
+# $Linkpdfownguard = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21132&authkey=AHkpiFXv6ANykrg&download=1"
+$Linkquery64 = "https://download.microsoft.com/download/E/C/E/ECEA1718-B83D-4406-B49D-3488EA5800EC/PowerQuery_2.62.5222.761%20(64-bit)%20[en-us].msi"
+# $Linkbrother = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21137&authkey=ABs5vN8Eqf62kPw&download=1"
+# $Linkt220 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21141&authkey=AOOyu0HYPL7DVlk&download=1"
+# $Linkt420 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21140&authkey=AClv9JMYeRCKhHk&download=1"
+# $Linkl220printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21264&authkey=ALaauWxjNremNz4&download=1"
+# $Linkl220scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21265&authkey=AKP0ZjUuZyDhHW0&download=1"
+# $Linkl350printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21138&authkey=ACLqQ2t8OAQ1WU0&download=1"
+# $Linkl350scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21139&authkey=APPi5TDGARIOphQ&download=1"
+# $Linkl360printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21142&authkey=ABHz7hTDSv_AtPI&download=1"
+# $Linkl360scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21143&authkey=AP5R0UWNHfeM5P8&download=1"
+# $Linkl380printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21170&authkey=AIZyeI81gPcJY7M&download=1"
+# $Linkl380scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21171&authkey=ALvDDuXsYFgVgEg&download=1"
+# $Linkl405printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21146&authkey=ADn6f6zYSrCoHQM&download=1"
+# $Linkl405scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21148&authkey=AHRjDedzWrho3Pg&download=1"
+# $Linkl1800 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21144&authkey=AOsE5pO4tuMu5Kc&download=1"
+# $Linklq2190 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21145&authkey=ADctuWUn98ds8rE&download=1"
+# $Linkrsim = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21149&authkey=AKigCx0ZHZ7iwUM&download=1"
+# $Linkrufus = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21147&authkey=ADOAVyS42og_rkQ&download=1"
 $LinkAnydesk = "https://download.anydesk.com/AnyDesk.exe"
-$LinkVNC = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21161&authkey=AN0hYu0Dc7KZnhg&download=1"
-$LinkChangeIP = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21122&authkey=ANtJfowqzdgDVDI&download=1"
-$LinkFilezilla = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21163&authkey=AM3LvL_ReXu4Ias&download=1"
-$LinkTeams = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21164&authkey=AJdik-7Jt_bRrWw&download=1"
-$LinkJavaTools = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21165&authkey=ALuPcEuJwY4_Kok&download=1"
-$LinkZoom = "https://zoom.us/client/5.13.7.12602/ZoomInstallerFull.exe?archType=x64"
-$LinkWin10 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21157&authkey=AB63cu5K2C1_HLc&download=1"
-$ActivedOffice = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21173&authkey=AN30ir6q9nH1YG4&download=1"
-$BookmarkChrome = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21238&authkey=AEMrkXTjmn44FTY&download=1"
-$LinkFz = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21241&authkey=ALx4WAKlKNcV3Ns&download=1"
-$LinkPowerBI = "https://onedrive.live.com/download?resid=5924245912399F7%21294&authkey=!AJDEuX2FSYcMnMk&download=1"
-$Debloat = "https://onedrive.live.com/download?resid=5924245912399F7%21166&authkey=!AEYo-MOvmM2b9z8&download=1"
+# $LinkVNC = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21161&authkey=AN0hYu0Dc7KZnhg&download=1"
+# $LinkChangeIP = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21122&authkey=ANtJfowqzdgDVDI&download=1"
+# $LinkFilezilla = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21163&authkey=AM3LvL_ReXu4Ias&download=1"
+# $LinkTeams = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21164&authkey=AJdik-7Jt_bRrWw&download=1"
+# $LinkJavaTools = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21165&authkey=ALuPcEuJwY4_Kok&download=1"
+$LinkZoom = "https://cdn.zoom.us/prod/6.2.6.49050/x64/ZoomInstallerFull.exe"
+# $LinkWin10 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21157&authkey=AB63cu5K2C1_HLc&download=1"
+# $ActivedOffice = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21173&authkey=AN30ir6q9nH1YG4&download=1"
+# $BookmarkChrome = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21238&authkey=AEMrkXTjmn44FTY&download=1"
+# $LinkFz = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21241&authkey=ALx4WAKlKNcV3Ns&download=1"
+# $LinkPowerBI = "https://onedrive.live.com/download?resid=5924245912399F7%21294&authkey=!AJDEuX2FSYcMnMk&download=1"
+# $Debloat = "https://onedrive.live.com/download?resid=5924245912399F7%21166&authkey=!AEYo-MOvmM2b9z8&download=1"
+$IEMode = "https://raw.githubusercontent.com/Rangga4869/script/refs/heads/main/IE_MODE.vbs"
 
 #remove item
 remove-item "c:\tmp\hosts" -force
@@ -397,7 +419,7 @@ switch ($Octet) {
 $OS = (Get-ComputerInfo WindowsProductName).WindowsProductName
 
 # Assign a value to $main based on the third octet
-switch ($Octet_3) {
+switch ($octet) {
     21 { $main = "http://$Octet.11:8500/alphaposwebv2/main.htm/" }
     22 { $main = "http://$Octet.11:8500/alphaposwebv2/main.htm/" }
     23 { $main = "http://$Octet.11:8500/alphaposwebv2/main.htm/" }
@@ -462,6 +484,7 @@ foreach ($ruleName in $rulesToEnable) {
 Clear-Host
 Show-Header
 cd C:
+
 $Button = [System.Windows.MessageBoxButton]::YesNoCancel
 $ErrorIco = [System.Windows.MessageBoxImage]::Error
 $Ask = 'Do you want to run this as an Administrator?
@@ -1168,8 +1191,27 @@ $Anydesk.Add_Click(
                     
         Write-Host "Download" $Apps "Success. Mohon tunggu, sedang proses menjalankan file" $Apps 
         $msiPath = "$FileFolder\Tightvnc.msi"
-        $msiArgs = "/quiet /norestart ADDLOCAL=Server VIEWER_ASSOCIATE_VNC_EXTENSION=1 SERVER_REGISTER_AS_SERVICE=1 SERVER_ADD_FIREWALL_EXCEPTION=1 VIEWER_ADD_FIREWALL_EXCEPTION=1 SERVER_ALLOW_SAS=1 SET_USEVNCAUTHENTICATION=1 VALUE_OF_USEVNCAUTHENTICATION=1 SET_PASSWORD=1 VALUE_OF_PASSWORD=matahari SET_USECONTROLAUTHENTICATION=1 VALUE_OF_USECONTROLAUTHENTICATION=1 SET_CONTROLPASSWORD=1 VALUE_OF_CONTROLPASSWORD=matahari SET_REMOVEWALLPAPER=0 VALUE_OF_REMOVEWALLPAPER=0"
-        Start-Process -FilePath "C:\Windows\System32\msiexec" -ArgumentList "/i $msiPath $msiArgs" -Wait
+        $msiArgs = @(
+            "/quiet",
+            "/norestart",
+            "ADDLOCAL=Server",
+            "VIEWER_ASSOCIATE_VNC_EXTENSION=1",
+            "SERVER_REGISTER_AS_SERVICE=1",
+            "SERVER_ADD_FIREWALL_EXCEPTION=1",
+            "VIEWER_ADD_FIREWALL_EXCEPTION=1",
+            "SERVER_ALLOW_SAS=1",
+            "SET_USEVNCAUTHENTICATION=1",
+            "VALUE_OF_USEVNCAUTHENTICATION=1",
+            "SET_PASSWORD=1",
+            "VALUE_OF_PASSWORD=matahari",
+            "SET_USECONTROLAUTHENTICATION=1",
+            "VALUE_OF_USECONTROLAUTHENTICATION=1",
+            "SET_CONTROLPASSWORD=1",
+            "VALUE_OF_CONTROLPASSWORD=matahari",
+            "SET_REMOVEWALLPAPER=1",
+            "VALUE_OF_REMOVEWALLPAPER=0"
+        )
+Start-Process -FilePath "C:\Windows\System32\msiexec" -ArgumentList "/i $msiPath $msiArgs" -Wait
         cmd /c d:\SourceIT\anydesk.exe --install "C:\program files (x86)\AnyDesk" --start-with-win --create-shortcuts --create-desktop-icon --silent
         remove-item "D:\SourceIT\Tightvnc.msi" -force
         remove-item "D:\SourceIT\anydesk.exe" -force
@@ -1313,39 +1355,48 @@ $Teams.Add_Click(
             
 $Office.Add_Click( 
     {
-        # Clear the host console and show copyright information
-Clear-Host
-Show-Copyright
+        clear-host
+        Show-Copyright
+        
+        $Apps = 'Install Microsoft Office 2013 for 64bit'
+        $Driver = 'Office2013.zip'
+        $Driver2 = 'setup.exe'
+        $Linkoffice = "http://yourdownloadlink.com/Office2013.zip" # Replace with actual download link
+        $FileFolder = "C:\YourDownloadFolder" # Replace with your actual folder path
+        
+        # Show popup for download instructions
+        $Linkoffice = "your_link_here"
 
-# Define variables for application, driver, and download link
-$Apps = 'Install Microsoft Office 2013 for 64bit'
-$Driver = 'Office2013.zip'
-$Driver2 = 'setup.exe'
-$Linkoffice = "http://yourdownloadlink.com/Office2013.zip" # Replace with actual download link
-$FileFolder = "C:\YourDownloadFolder" # Replace with your actual folder path
+        # Create the message text
+        $messageText = @"
+        Please download the file from the link:
+                
+        $Linkoffice
+                
+        and copy/move it to the folder D:\SourceIT.
+        Click OK once the download is complete.
 
-# Show popup for download instructions with clickable link
-$instructionMessage = "Please download the file from the link: `"$Linkoffice`". Click OK to proceed with the download."
-[System.Windows.Forms.MessageBox]::Show($instructionMessage, "Download Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        ( Silakan unduh file dari tautan tersebut dan 
+        salin/pindahkan ke folder D:\SourceIT. 
+        Klik OK jika unduhan sudah selesai. )
+"@
+        
+        # Show the message box
+        [System.Windows.Forms.MessageBox]::Show(
+            $messageText,
+            "Download Notification",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        )
 
-# Open the link in the default web browser
-Start-Process "mshta.exe" "javascript:var sh=new ActiveXObject('WScript.Shell'); sh.run('$Linkoffice');close()"
-
-# Notify the user of the download progress
-Write-Host "Please wait, downloading file" $Apps "size file : 667.54 MB"
-Invoke-WebRequest -Uri $Linkoffice -OutFile "$FileFolder\$Driver"
-
-# Notify user of successful download and proceed to run the application
-Write-Host "Download" $Apps "Successful. Proceeding to run" $Apps
-Expand-Archive -Path "$FileFolder\$Driver" -DestinationPath "$FileFolder\Office2013"
-
-# Start the setup process with confirmation
-[System.Windows.Forms.MessageBox]::Show("Download complete. Starting installation process.", "Installation Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-Start-Process -FilePath "$FileFolder\Office2013\$Driver2" -WorkingDirectory "$FileFolder\Office2013" -Wait
-
-# Show footer information
-Show-Footer
-
+        Write-Host "Please wait, downloading file" $Apps "size file : 667.54 MB"
+        Expand-Archive -Path "$FileFolder\$Driver" -DestinationPath "$FileFolder\Office2013"
+        
+        # Start the setup process with confirmation
+        [System.Windows.Forms.MessageBox]::Show("Download complete. Starting installation process.", "Installation Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        Start-Process -FilePath "$FileFolder\Office2013\$Driver2" -WorkingDirectory "$FileFolder\Office2013" -Wait
+        
+        Show-Footer
     } )
             
 $PdfOwnGuard.Add_Click( 
@@ -1875,7 +1926,7 @@ $other.Add_Click(
             
         $ETPtraining = New-Object system.Windows.Forms.Button
         $ETPtraining.FlatStyle = 'Flat'
-        $ETPtraining.text = "Server ETP Training"
+        $ETPtraining.text = " "
         $ETPtraining.width = 180
         $ETPtraining.height = 30
         $ETPtraining.Anchor = 'top,right,left'
@@ -2312,335 +2363,45 @@ $other.Add_Click(
             {
                 clear-host
                 Show-Copyright
-                $Apps = 'Setup Server ETP Training'
-                if ( $octet_4 -eq "31" -or $env:computername -eq "JKTL104358C" ) {
-                    $start_vm = "https://onedrive.live.com/download?resid=29FF20193859FEC6%21105&authkey=!AFOqVd59PQnBkW0&download=1"
-                    $stop_vm = "https://onedrive.live.com/download?resid=29FF20193859FEC6%21104&authkey=!ABWkidYDL9N-Nt8&download=1"
-
-                    Add-Type -AssemblyName Microsoft.VisualBasic
-                    $now = Get-Date -Format "MM/dd/yyyy"
-                    Enable-PSRemoting -SkipNetworkProfileCheck -Force
-                    Set-Item wsman:\localhost\Client\TrustedHosts -value * -Force
-
-                    $toko = [Microsoft.VisualBasic.Interaction]::InputBox("Masukkan kode toko (hanya kode toko) :", "HyperV Manager", "445")
-                    $starttgl = [Microsoft.VisualBasic.Interaction]::InputBox("Masukkan tanggal start training (format : MM/dd/yyyy) :", "HyperV Manager", $now)
-                    $long = [Microsoft.VisualBasic.Interaction]::InputBox("Masukkan durasi server training running (max 7 hari) :", "HyperV Manager", "7")
-                    $to2 = [Microsoft.VisualBasic.Interaction]::InputBox("Masukkan masukan alamat email yang bertanggung jawab - S01:", "HyperV Manager", "@matahari.com")
-                    $to3 = [Microsoft.VisualBasic.Interaction]::InputBox("Masukkan masukan alamat email yang bertanggung jawab - S02 (Jika ada):", "HyperV Manager", "@matahari.com")
-
-                    if ($long -gt "7") { $long = "7" }
-                    $Notiket = [Microsoft.VisualBasic.Interaction]::InputBox("Masukkan Nomor Tiket Request (R-xxxxxx):", "HyperV Manager", "R-")
-                
-                    $date = [DateTime]::ParseExact("$starttgl", "MM/dd/yyyy", $null)
-                    $days = [int]$long
-                    $a = $date.AddDays($days)
-                    $dates = Get-Date $date -Format MM/dd/yyyy                                 
-
-                    $stop = Get-Date $a -Format MM/dd/yyyy
-                    $datemail = Get-Date $dates -Format "dd MMMM yyyy"
-                    $stopmail = Get-Date $stop -Format "dd MMMM yyyy"
-                
-                    switch ($toko) {
-                        186 { $NS = "BAZAR AEON MALL" ; break }
-                        187 { $NS = "MDS BLUE MALL BEKASI" ; break }
-                        212 { $NS = "MDS SLEMAN CITY HALL" ; break }
-                        215 { $NS = "MDS KRAMAT JATI" ; break }
-                        221 { $NS = "MDS PANAKUKKANG MAL" ; break }
-                        223 { $NS = "MDS BATU MALANG" ; break }
-                        227 { $NS = "MDS SIDOARJO TOWN SQUARE" ; break }
-                        233 { $NS = "MDS BANGKALAN MADURA" ; break }
-                        235 { $NS = "MDS LIPO PLASA KENDARI" ; break }
-                        239 { $NS = "MDS CITRA GRAND CIBUBUR" ; break }
-                        241 { $NS = "MDS BIG MAL SAMARINDA" ; break }
-                        243 { $NS = "MDS CIBUBUR JUNCTION MAL " ; break }
-                        245 { $NS = "MDS CBD CILEDUG" ; break }
-                        249 { $NS = "MDS HARTONO MALL SOLO" ; break }
-                        252 { $NS = "MDS AMBON CITY CENTER" ; break }
-                        253 { $NS = "MDS MEGA TOWN SQ MAL PLK " ; break }
-                        254 { $NS = "MDS CIBINONG MALL BGR " ; break }
-                        255 { $NS = "MDS MALANG TOWN SQ TC" ; break }
-                        256 { $NS = "MDS KAZA SURABAYA" ; break }
-                        258 { $NS = "MDS MANDAU CITY" ; break }
-                        261 { $NS = "MDS MEDAN FAIR" ; break }
-                        263 { $NS = "MDS MEGA MALL TC MANADO " ; break }
-                        264 { $NS = "MDS PALU GRAND MALL" ; break }
-                        266 { $NS = "MDS LIPPO MALL PURI" ; break }
-                        267 { $NS = "MDS CIPUTRA MAL PEKANBARU" ; break }
-                        269 { $NS = "MDS DEPOK TOWN SQUARE" ; break }
-                        272 { $NS = "MDS THE PARK MAL DPK" ; break }
-                        273 { $NS = "MDS SKA MAL PEKANBARU " ; break }
-                        275 { $NS = "MDS MEGA MALL BATAM" ; break }
-                        276 { $NS = "MDS CITIPLAZA BONDOWOSO" ; break }
-                        281 { $NS = "MDS BRYLIAN PLZ MAL KDR " ; break }
-                        282 { $NS = "MDS HARTONO MALL JOGJA" ; break }
-                        283 { $NS = "MDS AYANI PONTIANAK" ; break }
-                        284 { $NS = "MDS QMALL BANJARBARU" ; break }
-                        287 { $NS = "MDS RATU INDAH MAL MKS" ; break }
-                        289 { $NS = "MDS PARAGON SEMARANG" ; break }
-                        290 { $NS = "MDS PALOPO CITY MARKET" ; break }
-                        293 { $NS = "MDS ROYAL PLAZA TC SBY " ; break }
-                        294 { $NS = "MDS JOGJA CITY MAL" ; break }
-                        296 { $NS = "MDS SERANG" ; break }
-                        298 { $NS = "MDS PLAZA KALIBATA" ; break }
-                        299 { $NS = "MDS CITIMALL TC CILEGON " ; break }
-                        300 { $NS = "MDS LIPPO PLAZA LUBUKLINGGAU" ; break }
-                        302 { $NS = "MDS FESTIVE WALK MAL KWG " ; break }
-                        303 { $NS = "MDS SOLO SQUARE" ; break }
-                        305 { $NS = "MDS NAGOYA HILL BATAM" ; break }
-                        307 { $NS = "MDS SUKABUMI" ; break }
-                        309 { $NS = "MDS BINJAI SUPERMALL TC " ; break }
-                        310 { $NS = "MDS LIPPO PLZ MAL BUTON " ; break }
-                        311 { $NS = "MDS DUTA MALL BANJARMASIN" ; break }
-                        312 { $NS = "MDS LIPPO PLAZA JAMBI" ; break }
-                        313 { $NS = "MDS PEJATEN VILLAGE" ; break }
-                        314 { $NS = "MDS LOMBOK EPICENTRUM MALL" ; break }
-                        316 { $NS = "MDS CITY SQUARE BATAM" ; break }
-                        317 { $NS = "MDS CITIMALL DUMAI" ; break }
-                        319 { $NS = "MDS ONE BATAM MALL " ; break }
-                        321 { $NS = "MDS MULIA PLAZA SAMARINDA" ; break }
-                        322 { $NS = "MDS SINGKAWANG" ; break }
-                        326 { $NS = "MDS LIPPO PLAZA JEMBER" ; break }
-                        327 { $NS = "MDS CITIMALL SAMPIT" ; break }
-                        328 { $NS = "MDS THE PARK SEMARANG  " ; break }
-                        329 { $NS = "MDS LIPPO PLZ MAL KUPANG " ; break }
-                        330 { $NS = "MDS THE PARK KENDARI" ; break }
-                        332 { $NS = "MDS GAJAH MADA PLAZA" ; break }
-                        333 { $NS = "MDS MANADO TOWN SQ MAL" ; break }
-                        334 { $NS = "MDS OPI MAL PALEMBANG " ; break }
-                        336 { $NS = "MDS BALIKPAPAN BARU" ; break }
-                        337 { $NS = "MDS BASKO GRAND MALL PADANG" ; break }
-                        338 { $NS = "MDS PALEMBANG SQUARE MAL " ; break }
-                        339 { $NS = "MDS ARTHA GADING MALL" ; break }
-                        344 { $NS = "MDS METROPOLITAN MALL CILEUNGS1" ; break }
-                        345 { $NS = "MDS CENTRAL PLAZA LAMPUNG" ; break }
-                        347 { $NS = "MDS CITO" ; break }
-                        350 { $NS = "MDS BENCOOLEN MAL BGL" ; break }
-                        351 { $NS = "MDS CITIMALL GORONTALO" ; break }
-                        352 { $NS = "MDS SUNRISE MAL MOJOKERTO" ; break }
-                        355 { $NS = "MDS BALIKPAPAN SUPERBLOK" ; break }
-                        358 { $NS = "MDS CIREBON SUPER BLOK" ; break }
-                        359 { $NS = "MDS FESTIVAL CITYLINK BANDUNG" ; break }
-                        362 { $NS = "MDS TANJUNGPINANG MAL" ; break }
-                        366 { $NS = "MDS CITIMALL KETAPANG" ; break }
-                        367 { $NS = "MDS JAYAPURA" ; break }
-                        368 { $NS = "MDS ARTOS MAGELANG" ; break }
-                        369 { $NS = "MDS PLAZA ACEH" ; break }
-                        371 { $NS = "MDS PONDOK GEDE" ; break }
-                        372 { $NS = "MDS AMBARUKMO" ; break }
-                        374 { $NS = "MDS TAMAN ANGGREK" ; break }
-                        375 { $NS = "MDS EKALOKASARI BOGOR" ; break }
-                        376 { $NS = "MDS MITRA MALANG HS " ; break }
-                        379 { $NS = "MDS SERPONG" ; break }
-                        381 { $NS = "MDS SINGOSAREN" ; break }
-                        382 { $NS = "MDS CITIMALL BATURAJA " ; break }
-                        384 { $NS = "MDS CITYMALL LAHAT" ; break }
-                        387 { $NS = "MDS MANHATTAN" ; break }
-                        388 { $NS = "MDS SUN CITY MADIUN" ; break }
-                        389 { $NS = "MDS JAVA SUPERMALL SMG" ; break }
-                        392 { $NS = "MDS PACIFIC MALL TEGAL" ; break }
-                        394 { $NS = "MDS TANGCITY MAL TANGERANG" ; break }
-                        398 { $NS = "MDS KAWANUA MANADO" ; break }
-                        399 { $NS = "MDS ICON MAL GRESIK" ; break }
-                        401 { $NS = "MDS CIANJUR" ; break }
-                        402 { $NS = "MDS UPTOWN MALL BSB CITY SEMARANG" ; break }
-                        404 { $NS = "MDS POLLUX MALL CHADSTONE CIKARANG" ; break }
-                        405 { $NS = "MDS LEMBUSWANA TC SMR " ; break }
-                        406 { $NS = "MDS REVO TOWN BEKASI" ; break }
-                        407 { $NS = "MDS DISCOVERY MALL BALI" ; break }
-                        408 { $NS = "MDS PLAZA BALIKPAPAN" ; break }
-                        409 { $NS = "MDS GRAND MALL BEKASI" ; break }
-                        410 { $NS = "MDS SALLO MALL SENGKANG" ; break }
-                        412 { $NS = "MDS CITIMALL BONTANG" ; break }
-                        413 { $NS = "MDS KEDIRI" ; break }
-                        415 { $NS = "MDS MADIUN" ; break }
-                        418 { $NS = "MDS LIVING PLZ HERTASNING GOWA" ; break }
-                        419 { $NS = "MDS PAKUWON MALL SURABAYA" ; break }
-                        420 { $NS = "MDS MALL@BASSURA" ; break }
-                        423 { $NS = "MDS BALE KOTA MAL TNG " ; break }
-                        426 { $NS = "MDS MATAHARI HS TSM" ; break }
-                        440 { $NS = "MDS CIPUTRA CITRA RAYA" ; break }
-                        441 { $NS = "MDS PONTIANAK" ; break }
-                        443 { $NS = "MDS CITIMALL PRABUMULIH " ; break }
-                        445 { $NS = "MDS PTC PALEMBANG" ; break }
-                        446 { $NS = "MDS UBERTOS" ; break }
-                        447 { $NS = "MDS CILEGON CENTER TC" ; break }
-                        453 { $NS = "MDS SUPERMALL KARAWACI" ; break }
-                        457 { $NS = "MDS MAL BALI GALERIA" ; break }
-                        471 { $NS = "MDS CILANDAK TOWN SQUARE" ; break }
-                        473 { $NS = "MDS GRESS MALL" ; break }
-                        501 { $NS = "MDS DUTA PLAZA MAL DPR" ; break }
-                        503 { $NS = "MDS MAGELANG" ; break }
-                        507 { $NS = "MDS INTERNATIONAL PLAZA PALEMBANG" ; break }
-                        511 { $NS = "MDS ARION MALL" ; break }
-                        517 { $NS = "MDS SIMPANG LIMA MAL SMG " ; break }
-                        523 { $NS = "MDS TUNJUNGAN PLAZA" ; break }
-                        528 { $NS = "MDS SIDOARJO PLAZA" ; break }
-                        536 { $NS = "MDS KUDUS BZR" ; break }
-                        537 { $NS = "MDS JOHAR PLAZA JEMBER" ; break }
-                        539 { $NS = "MDS SOLO GRAND MALL" ; break }
-                        546 { $NS = "MDS BALIKPAPAN OCEAN SQUARE" ; break }
-                        553 { $NS = "MDS THAMRIN PLAZA MEDAN" ; break }
-                        555 { $NS = "MDS METROPOLITAN MALL BEKASI" ; break }
-                        563 { $NS = "MDS MALIOBORO MALL" ; break }
-                        567 { $NS = "MDS DELTA PLZ MAL SBY " ; break }
-                        571 { $NS = "MDS CITRALAND" ; break }
-                        594 { $NS = "MDS MANADO TRADE CENTER" ; break }
-                        595 { $NS = "MDS BIP MAL BANDUNG" ; break }
-                        619 { $NS = "MDS KLATEN" ; break }
-                        637 { $NS = "MDS BLOK M PLAZA" ; break }
-                        641 { $NS = "MDS PLAZA CITRA PEKANBARU" ; break }
-                        643 { $NS = "MDS AMBON INDAH PLAZA" ; break }
-                        645 { $NS = "MDS MEDAN MALL" ; break }
-                        649 { $NS = "MDS GALERIA JOGJA" ; break }
-                        653 { $NS = "MDS LIPPO CIKARANG" ; break }
-                        655 { $NS = "MDS PLAZA ATRIUM" ; break }
-                        673 { $NS = "MDS DAAN MOGOT MAL JKT " ; break }
-                        677 { $NS = "MDS GRAGE MALL CIREBON" ; break }
-                        697 { $NS = "MDS PEKALONGAN" ; break }
-                        804 { $NS = "MDS MATAHARI HS PWT " ; break }
-                    }                    
-                    # Konfigurasi email
-                    $smtpServer = "smtp.office365.com"
-                    $smtpPort = 587
-                    $smtpUsername = "rangga.prawira@outlook.com"
-                    $smtpPassword = "Holmes4869"
-                    $firstName = "Rangga"
-                    $lastName = "Prawira"
-
-                    # Alamat penerima
-                    $senderEmail = "rangga.prawira@outlook.com"
-                    $to = "spv.area.$toko@matahari.com"                   
-                    $cc = $to2 , $to3
-                    $bcc = "rangga.prawira@matahari.com"
-
-                    # Alamat pengirim
-                    $from = "$firstName $lastName <$senderEmail>"
-
-                    # Subjek email
-                    $subject = "Informasi : Open Akses Server ETP Training $NS - $toko dari tanggal $datemail sampai tanggal $stopmail"
-
-                    # Isi email
-                    $body = "Dengan Hormat`n`n"
-                    $body += "`n"
-                    $body += "Bersama ini kami informasikan bahwa pada hari ini $NS - $toko telah melakukan request akses server ETP training dengan nomor tiket $notiket, yang dimana akan dilakukan pada tanggal $datemail sampai dengan tanggal $stopmail.`n"
-                    $body += "Untuk itu kami sudah mensetting server ETP training yang akan otomatis menyala pada tanggal $datemail jam 09:00 WIB. dan akan mati otomatis pada tanggal $stopmail jam 18:00 WIB sesuai sebagaimana anda request.`n"
-                    $body += "`n"
-                    $body += "Lalu POS yang di setting ke Server training, bisa di rakit hanya di ruangan training saja, dan tidak diperkenankan di setting di dalam area toko.`n"
-                    $body += "`n"
-                    $body += "Atas perhatian dan kerjasamanya, terimakasih`n"
-                    $body += "`n"
-                    $body += "Warning : Pesan ini dikirim otomatis, dimohon tidak untuk me-reply email ini. `n"
-                    $body += "Jika ingin me-reply email harap email ke mailto:rangga.prawira@matahari.com atau jika ada pertanyaan dapat menghubungi lewat whatsapp https://shorturl.at/frwx8 ...`n`n"
-                    $body += "Best Regard,`n`n"
-                    $body += "Rangga Prawira`n"
-                    $body += "IT Support`n"
-
-                    # Pengaturan email
-                    $emailParameters = @{
-                        SmtpServer = $smtpServer
-                        Port       = $smtpPort
-                        UseSsl     = $true
-                        Credential = (New-Object System.Management.Automation.PSCredential($smtpUsername, (ConvertTo-SecureString $smtpPassword -AsPlainText -Force)))
-                        From       = $from
-                        To         = $to
-                        CC         = $cc
-                        BCC        = $bcc
-                        Subject    = $subject
-                        Body       = $body
-                    }
-
-                    # Mengirim email
-                    Send-MailMessage @emailParameters
-
-                    invoke-webrequest -uri $Start_vm -outfile "C:\Program Files (x86)\Internet Explorer\start_VM.ps1"
-                    invoke-webrequest -uri $Stop_Vm -outfile "C:\Program Files (x86)\Internet Explorer\stop_VM.ps1"
-
-                    $file = "C:\Program Files (x86)\Internet Explorer\Start_VM.ps1"
-                    $searchText = @{
-                        "Kodetoko" = $toko   
-                        "ccemail"  = $to2    
-                        "bccemail" = $to3  
-                    }
-            
-                    # Membaca isi file ke dalam variabel
-                    $content = Get-Content $file
-            
-                    # Mengganti teks tertentu dalam isi file
-                    $searchText.GetEnumerator() | ForEach-Object {
-                        $content = $content -replace $_.Key, $_.Value
-                    }
-            
-                    # Menulis isi file yang telah diubah ke dalam file
-                    Set-Content $file $content
-
-
-                    $file = "C:\Program Files (x86)\Internet Explorer\Stop_VM.ps1"
-                    $searchText = @{
-                        "Kodetoko" = $toko 
-                        "ccemail"  = $to2    
-                        "bccemail" = $to3  
-                    }
-            
-                    # Membaca isi file ke dalam variabel
-                    $content = Get-Content $file
-            
-                    # Mengganti teks tertentu dalam isi file
-                    $searchText.GetEnumerator() | ForEach-Object {
-                        $content = $content -replace $_.Key, $_.Value
-                    }
-            
-                    # Menulis isi file yang telah diubah ke dalam file
-                    Set-Content $file $content
-
-                    $namaTugas = "Start_VM"
-
-                    $tugasAda = Get-ScheduledTask -TaskName $namaTugas -ErrorAction SilentlyContinue
-
-                    if ($tugasAda) {
-                        $TimeStart = New-ScheduledTaskTrigger -At "$dates 09:00" -Once
-                        Set-ScheduledTask -TaskName "Start_VM" -Trigger $TimeStart
-                        $TimeStop = New-ScheduledTaskTrigger -At "$stop 18:00" -Once
-                        Set-ScheduledTask -TaskName "Stop_VM" -Trigger $TimeStop
-                        Send-Telegram -Message "Setting Akses Server Training Toko $Toko on $dates - $stop"
-
-                    }
-                    else {
-                        $scriptPath = "C:\Program Files (x86)\Internet Explorer\Start_VM.ps1"
-                        $trigger = New-ScheduledTaskTrigger -Once -At "$dates 09:00"
-                        $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "$scriptPath"
-                        Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "Start_VM"  -RunLevel 'Highest' -User 'SYSTEM' -Force
-
-                        $scriptPath = "C:\Program Files (x86)\Internet Explorer\Stop_VM.ps1"
-                        $trigger = New-ScheduledTaskTrigger -Once -At "$stop 18:00"
-                        $action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "$scriptPath"
-                        Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "Stop_VM" -Force
-
-                        Show-Footer
-                    }
-
-                    else {
-                        # Message to display in the message box
-                        $message = "Maaf, Request ini hanya bisa di PC EDP dengan IP $Octet.31, IP PC Anda adalah $IP4 !"
-        
-                        # Title of the message box
-                        $title = "Only PC EDP"
-        
-                        # Show the message box with OK button and exclamation mark icon
-                        [System.Windows.Forms.MessageBox]::Show($message, $title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Exclamation)
-                    }
-        
-                    
-                } }  )
+             } )
                
-        $CheckDisk.Add_Click( 
-            {
-                clear-host 
+             $CheckDisk.Add_Click({ 
+                Clear-Host 
                 Show-Copyright
                 $Apps = "Check Disk"
-                Powershell.exe Get-PhysicalDisk | Where-Object { $_.HealthStatus -ne "Healthy" -and $_.DeviceID } | ForEach-Object { Start-Process -FilePath "chkdsk.exe" -ArgumentList "/f /r /x", $_.DeviceID }
-                write-Host $_.HealthStatus "Healthy"
-                Show-Footer            
-            } )
+                
+                Write-Host "Checking disk health status..." -ForegroundColor Yellow
+                
+                # Get all physical disks
+                $disks = Get-PhysicalDisk
+                
+                if ($disks) {
+                    foreach ($disk in $disks) {
+                        Write-Host "`nChecking Disk $($disk.DeviceID)" -ForegroundColor Cyan
+                        Write-Host "Health Status: $($disk.HealthStatus)" -ForegroundColor Yellow
+                        
+                        if ($disk.HealthStatus -ne "Healthy") {
+                            Write-Host "Issues detected on Disk $($disk.DeviceID). Running CHKDSK..." -ForegroundColor Red
+                            try {
+                                Start-Process -FilePath "chkdsk.exe" -ArgumentList "/f /r /x $($disk.DeviceID)" -Wait -NoNewWindow
+                                Write-Host "CHKDSK completed for Disk $($disk.DeviceID)" -ForegroundColor Green
+                            } catch {
+                                Write-Host "Error running CHKDSK on Disk $($disk.DeviceID): $_" -ForegroundColor Red
+                            }
+                        } else {
+                            Write-Host "Disk $($disk.DeviceID) is healthy. No CHKDSK needed." -ForegroundColor Green
+                        }
+                        
+                        Write-Host "Model: $($disk.Model)" -ForegroundColor Gray
+                        Write-Host "Size: $([math]::Round($disk.Size/1GB, 2)) GB" -ForegroundColor Gray
+                    }
+                } else {
+                    Write-Host "No physical disks found!" -ForegroundColor Red
+                }
+                
+                Write-Host "`nDisk check completed." -ForegroundColor Green
+                Show-Footer
+            })
                 
         $CleanUp.Add_Click( 
             {
@@ -2739,9 +2500,9 @@ $other.Add_Click(
                     #Shortcut Monthly Insentive
                     $Url_Apk = "http://192.168.6.92/forms/frmservlet?config=spapps"
                     $Nama_Apk = "Monthly Incentive"
-
+                   
                     $NameApk = [System.String]::Concat("C:\Program Files (x86)\Internet Explorer\", $Nama_Apk, ".vbs")
-                    invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%21351&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile $nameapk
+                    invoke-webrequest -uri $IEMode -outfile $nameapk
                     $file = $nameapk
     
                     $searchText = @{
@@ -2788,7 +2549,7 @@ $other.Add_Click(
                     $Nama_Apk = "Monthly Incentive"
 
                     $NameApk = [System.String]::Concat("C:\Program Files (x86)\Internet Explorer\", $Nama_Apk, ".vbs")
-                    invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%21351&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile $nameapk
+                    invoke-webrequest -uri $IEMode -outfile $nameapk
                     $file = $nameapk
     
                     $searchText = @{
@@ -2831,7 +2592,7 @@ $other.Add_Click(
                     $Nama_Apk = "PPK"
 
                     $NameApk = [System.String]::Concat("C:\Program Files (x86)\Internet Explorer\", $Nama_Apk, ".vbs")
-                    invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%21351&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile $nameapk
+                    invoke-webrequest -uri $IEMode -outfile $nameapk
                     $file = $nameapk
     
                     $searchText = @{
@@ -2877,7 +2638,7 @@ $other.Add_Click(
                     $Nama_Apk = "Monthly Incentive"
 
                     $NameApk = [System.String]::Concat("C:\Program Files (x86)\Internet Explorer\", $Nama_Apk, ".vbs")
-                    invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%21351&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile $nameapk
+                    invoke-webrequest -uri $IEMode -outfile $nameapk
                     $file = $nameapk
     
                     $searchText = @{
@@ -2921,7 +2682,7 @@ $other.Add_Click(
                     $Nama_Apk = "PPK"
 
                     $NameApk = [System.String]::Concat("C:\Program Files (x86)\Internet Explorer\", $Nama_Apk, ".vbs")
-                    invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%21351&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile $nameapk
+                    invoke-webrequest -uri $IEMode -outfile $nameapk
                     $file = $nameapk
     
                     $searchText = @{
@@ -2963,7 +2724,7 @@ $other.Add_Click(
                     $Nama_Apk = "HRCV"
 
                     $NameApk = [System.String]::Concat("C:\Program Files (x86)\Internet Explorer\", $Nama_Apk, ".vbs")
-                    invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%21351&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile $nameapk
+                    invoke-webrequest -uri $IEMode -outfile $nameapk
                     $file = $nameapk
     
                     $searchText = @{
@@ -3026,40 +2787,72 @@ $other.Add_Click(
                 clear-host 
                 Show-Copyright
                 $Apps = " Uninstall Office 2016"
-                # Cari instalasi Microsoft Office 2016
-                $Office = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "Microsoft Office Professional Plus 2016*" }
-                $skype = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "Skype for Business 2016*" }
-                $skypebasic = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "Skype for Business Basic 2016*" }
-                $skypeall = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like "Skype*" }
-            
-                # Periksa apakah ada instalasi yang ditemukan
-                if ($Office) {
-                    # Hapus instalasi Microsoft Office 2016
-                    $Office.Uninstall()
-                    Write-Host "Uninstall Microsoft Office 2016 Successfully."
+                function Uninstall-Office2016 {
+                    Write-Host "Starting Office 2016 uninstallation process..." -ForegroundColor Yellow
+                
+                    # Create an array to store all target applications
+                    $officeApps = @(
+                        @{Name = "Microsoft Office Professional Plus 2016*"; Display = "Microsoft Office 2016"},
+                        @{Name = "Skype for Business 2016*"; Display = "Skype for Business 2016"},
+                        @{Name = "Skype for Business Basic 2016*"; Display = "Skype for Business Basic 2016"},
+                        @{Name = "Skype*"; Display = "Skype"}
+                    )
+                
+                    $uninstallCount = 0
+                
+                    foreach ($app in $officeApps) {
+                        Write-Host "Searching for $($app.Display)..." -ForegroundColor Cyan
+                        $installation = Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like $app.Name }
+                        
+                        if ($installation) {
+                            try {
+                                Write-Host "Uninstalling $($app.Display)..." -ForegroundColor Yellow
+                                $installation.Uninstall()
+                                Write-Host "Successfully uninstalled $($app.Display)" -ForegroundColor Green
+                                $uninstallCount++
+                            }
+                            catch {
+                                Write-Host "Error uninstalling $($app.Display): $_" -ForegroundColor Red
+                            }
+                        }
+                        else {
+                            Write-Host "No installation found for $($app.Display)" -ForegroundColor Gray
+                        }
+                    }
+                
+                    if ($uninstallCount -eq 0) {
+                        Write-Host "`nNo Office 2016 components were found to uninstall." -ForegroundColor Yellow
+                    }
+                    else {
+                        Write-Host "`nUninstallation process completed. Successfully removed $uninstallCount component(s)." -ForegroundColor Green
+                    }
+                
+                    # Optional: Clean up registry keys
+                    Write-Host "`nCleaning up remaining registry entries..." -ForegroundColor Cyan
+                    $regPaths = @(
+                        "HKLM:\SOFTWARE\Microsoft\Office\16.0",
+                        "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration",
+                        "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\propertyBag",
+                        "HKCU:\Software\Microsoft\Office\16.0"
+                    )
+                
+                    foreach ($path in $regPaths) {
+                        if (Test-Path $path) {
+                            try {
+                                Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                                Write-Host "Removed registry key: $path" -ForegroundColor Green
+                            }
+                            catch {
+                                Write-Host "Could not remove registry key $path : $_" -ForegroundColor Red
+                            }
+                        }
+                    }
+                
+                    Write-Host "`nCleanup process completed." -ForegroundColor Green
+                    Write-Host "Please restart your computer to complete the uninstallation process." -ForegroundColor Yellow
                 }
-                else {
-                    Write-Host "Tidak ada instalasi Microsoft Office 2016 yang ditemukan."
-                }
-                #Uninstall Skype for business
-                if ($skype) {
-                    # Hapus instalasi Skype for Business 2016
-                    $skype.Uninstall()
-                    Write-Host "Uninstall Skype for Business 2016 Successfully."
-                }
-                elseif ($skypebasic) {
-                    # Hapus instalasi Skype for Business Basic 2016
-                    $skype.Uninstall()
-                    Write-Host "Uninstall Skype for Business 2016 Basic Successfully."
-                }
-                elseif ($skypeall) {
-                    # Hapus instalasi Skype
-                    $skype.Uninstall()
-                    Write-Host "Uninstall"$skypeall.Name" Successfully."
-                }
-                else {
-                    Write-Host "Tidak ada instalasi Skype for Business 2016 yang ditemukan."
-                }	
+
+                Uninstall-Office2016
             } )
                 
         $SiteFz.Add_Click( 
@@ -3222,7 +3015,7 @@ $other.Add_Click(
                     New-Item D:\VNC -itemType Directory -ErrorAction Ignore -Force
                     $folder = Get-Item -Path $folderPath_VNC
                     $folder.Attributes = $folder.Attributes -bor [System.IO.FileAttributes]::Hidden
-                    invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%21311&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile "$folderPath_VNC\VNC.zip"
+                    invoke-webrequest -uri "https://raw.githubusercontent.com/Rangga4869/script/refs/heads/main/tightvnc.msi" -outfile "$folderPath_VNC\VNC.zip"
                     expand-archive -path "$folderPath_VNC\VNC.zip" "$folderPath_VNC\"
                     remove-item "$folderPath_VNC"\VNC.zip -force
                 }
@@ -3255,7 +3048,7 @@ $other.Add_Click(
             default { $PC = "1" }    
         }
                 $NameApk = [System.String]::Concat("C:\Program Files (x86)\Internet Explorer\", $Nama_Apk, ".vbs")
-                invoke-webrequest -uri "https://onedrive.live.com/download?resid=5924245912399F7%21351&authkey=!AJDEuX2FSYcMnMk&download=1" -outfile $nameapk
+                invoke-webrequest -uri $IEMode -outfile $nameapk
                 $file = $nameapk
 
                 $searchText = @{
