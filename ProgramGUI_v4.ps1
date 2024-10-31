@@ -7,6 +7,7 @@ $EnableEdgePDFTakeover.Location = New-Object System.Drawing.Point(155, 260)
 #>
 
 #This will self elevate the script so with a UAC prompt since this script needs to be run as an Administrator in order to function properly.
+$ErrorActionPreference = 'SilentlyContinue'
 function Download-AndExecute {
     param($url, $outputFile)
     try {
@@ -19,68 +20,6 @@ function Download-AndExecute {
         return $false
     }
 }
-
-$ErrorActionPreference = 'SilentlyContinue'
-$fileFolder = "D:\SourceIT"
-$size = Get-PhysicalDisk
-#Create Drive D
-$DriveD = Get-Volume -DriveLetter D -ErrorAction SilentlyContinue
-if (!$DriveD) {
-    if ($size.size -eq "512110190592" -or $size.size -eq "500107862016") {
-        Start-Process "Powershell.exe" -ArgumentList "Resize-Partition -DriveLetter C -Size 230GB" -Wait -Verb RunAs
-        Start-Process "Powershell.exe" -ArgumentList "New-Partition -DiskNumber 0 -UseMaximumSize -DriveLetter D" -Wait -Verb RunAs
-        Start-Process "Powershell.exe" -ArgumentList "Format-Volume -DriveLetter D -FileSystem NTFS -NewFileSystemLabel 'DATA' -Force" -Wait -Verb RunAs
-        New-Item $fileFolder -itemType Directory -ErrorAction Ignore -Force
-        Clear-Host
-    }
-    else {
-        Start-Process "Powershell.exe" -ArgumentList "Resize-Partition -DriveLetter C -Size 480GB" -Wait -Verb RunAs
-        Start-Process "Powershell.exe" -ArgumentList "New-Partition -DiskNumber 0 -UseMaximumSize -DriveLetter D" -Wait -Verb RunAs
-        Start-Process "Powershell.exe" -ArgumentList "Format-Volume -DriveLetter D -FileSystem NTFS -NewFileSystemLabel 'DATA' -Force" -Wait -Verb RunAs
-        New-Item $fileFolder -itemType Directory -ErrorAction Ignore -Force
-        Clear-Host
-    }
-}
-
-#Cek D:\SourceIT
-if (-Not (Test-Path -Path $fileFolder -PathType Container)) {
-    New-Item $fileFolder -itemType Directory -ErrorAction Ignore -Force
-    $folder = Get-Item -Path $fileFolder
-    $folder.Attributes = $folder.Attributes -bor [System.IO.FileAttributes]::Hidden
-} 
-
-Write-Host "Mohon tunggu, process verifikasi sedang berjalan....."
-# Get active user from quser and clean up the username
-$activeUser = (quser | Where-Object { $_ -match 'Active' }) -split '\s+' | 
-    Where-Object { $_ -and $_ -ne 'Active' } | 
-    Select-Object -First 1 | 
-    ForEach-Object { $_ -replace '^>', '' }  # Remove the '>' character
-
-Write-Host "Active user: $activeUser"
-
-$loc_Roaming = "C:\Users\$activeUser\AppData\Roaming"
-$Loc_Appdata = "C:\Users\$activeUser\AppData"
-$Loc_users = "C:\Users\$activeUser"
-
-if (-Not (Test-Path -Path "$Loc_users\desktop" -PathType Container)) {
-    $Loc_users = "$loc_users\OneDrive - PT Matahari Department Store, Tbk\Desktop"
-}
-else {
-    $Loc_users = "$loc_users\desktop"
-}
-write-host $loc_users
-
-Remove-Item -LiteralPath "c:\runas" -Force -Recurse
-Remove-Item -LiteralPath "c:\tmp" -Force -Recurse
-New-Item "c:\tmp" -itemType Directory -ErrorAction Ignore -Force
-$folder = Get-Item -Path "C:\tmp"
-$folder.Attributes = $folder.Attributes -bor [System.IO.FileAttributes]::Hidden
-
-#Remove File temp and add user mdsluser
-Remove-Item -Path "$env:TEMP\*" -Recurse -Force
-cmd.exe /c net localgroup administrators mdsadm /delete
-cmd.exe net localgroup administrators "IT - SAM" /add
-cmd.exe /c net accounts /maxpwage:unlimited
 
 #Copyright
 function Show-MessageInTopRightCorner {
@@ -149,8 +88,66 @@ function Show-Footer {
 
 Show-Header
 
+
+$fileFolder = "D:\SourceIT"
+$size = Get-PhysicalDisk
+#Create Drive D
+$DriveD = Get-Volume -DriveLetter D -ErrorAction SilentlyContinue
+if (!$DriveD) {
+    if ($size.size -eq "512110190592" -or $size.size -eq "500107862016") {
+        Start-Process "Powershell.exe" -ArgumentList "Resize-Partition -DriveLetter C -Size 230GB" -Wait -Verb RunAs
+        Start-Process "Powershell.exe" -ArgumentList "New-Partition -DiskNumber 0 -UseMaximumSize -DriveLetter D" -Wait -Verb RunAs
+        Start-Process "Powershell.exe" -ArgumentList "Format-Volume -DriveLetter D -FileSystem NTFS -NewFileSystemLabel 'DATA' -Force" -Wait -Verb RunAs
+        New-Item $fileFolder -itemType Directory -ErrorAction Ignore -Force
+        Clear-Host
+    }
+    else {
+        Start-Process "Powershell.exe" -ArgumentList "Resize-Partition -DriveLetter C -Size 480GB" -Wait -Verb RunAs
+        Start-Process "Powershell.exe" -ArgumentList "New-Partition -DiskNumber 0 -UseMaximumSize -DriveLetter D" -Wait -Verb RunAs
+        Start-Process "Powershell.exe" -ArgumentList "Format-Volume -DriveLetter D -FileSystem NTFS -NewFileSystemLabel 'DATA' -Force" -Wait -Verb RunAs
+        New-Item $fileFolder -itemType Directory -ErrorAction Ignore -Force
+        Clear-Host
+    }
+}
+
+#Cek D:\SourceIT
+if (-Not (Test-Path -Path $fileFolder -PathType Container)) {
+    New-Item $fileFolder -itemType Directory -ErrorAction Ignore -Force
+    $folder = Get-Item -Path $fileFolder
+    $folder.Attributes = $folder.Attributes -bor [System.IO.FileAttributes]::Hidden
+} 
+
+Write-Host "Mohon tunggu, process verifikasi sedang berjalan....."
+# Get active user from quser and clean up the username
+$activeUser = (quser | Where-Object { $_ -match 'Active' }) -split '\s+' | 
+    Where-Object { $_ -and $_ -ne 'Active' } | 
+    Select-Object -First 1 | 
+    ForEach-Object { $_ -replace '^>', '' }  # Remove the '>' character
+
+Write-Host "Active user: $activeUser"
+
+$loc_Roaming = "C:\Users\$activeUser\AppData\Roaming"
+$Loc_Appdata = "C:\Users\$activeUser\AppData"
+$Loc_users = "C:\Users\$activeUser"
+
+if (-Not (Test-Path -Path "$Loc_users\desktop" -PathType Container)) {
+    $Loc_users = "$Loc_users\OneDrive - PT Matahari Department Store, Tbk\Desktop"
+}
+else {
+    $Loc_users = "$Loc_users\desktop"
+}
+Write-Host $loc_users
+
+# Hapus folder jika ada
+Remove-Item -LiteralPath "c:\runas" -Force -Recurse -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath "c:\tmp" -Force -Recurse -ErrorAction SilentlyContinue
+
+# Buat folder tmp menggunakan PowerShell
+New-Item "c:\tmp" -ItemType Directory -Force | Out-Null
+
 #Proses Download LSAgent & VNC Server
 Write-Host "Mohon tunggu proses sedang berjalan...."
+pause
 $hostsUrl = "https://raw.githubusercontent.com/Rangga4869/script/refs/heads/main/hosts"
 if (-not (Download-AndExecute -url $hostsUrl -outputFile "c:\tmp\hosts")) {
     $downloadSuccess = $false
@@ -187,7 +184,7 @@ reg import C:\tmp\email.reg
 $Link7zip = "https://www.7-zip.org/a/7z2408-x64.exe"
 # $LinkAtt = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21236&authkey=AC_hTXc7voZ0Vfk&download=1"
 # $LinkAttendance = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21133&authkey=ALDyuWeilU0fBTg&download=1"
-# $LinkTM64 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21121&authkey=AHvBbYpyyx8UJoU&download=1"
+$LinkTM64 = "https://my.microsoftpersonalcontent.com/personal/05924245912399f7/_layouts/15/download.aspx?UniqueId=912399f7-4245-2092-8005-790000000000&Translate=false&tempauth=v1e.eyJzaXRlaWQiOiJhYTliMmI2Ny05YTFmLTRiNzUtOGIwNi0zMjFjNTAxNjc4ZTgiLCJhcHBpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDA0ODE3MTBhNCIsImF1ZCI6IjAwMDAwMDAzLTAwMDAtMGZmMS1jZTAwLTAwMDAwMDAwMDAwMC9teS5taWNyb3NvZnRwZXJzb25hbGNvbnRlbnQuY29tQDkxODgwNDBkLTZjNjctNGM1Yi1iMTEyLTM2YTMwNGI2NmRhZCIsImV4cCI6IjE3MzAzNDE3NjgifQ.NFnnx7npJ0vtUg3Pac2cZISPDSd2uI_ptcB7OSWrB-pwAfHjJxomD88HeZTgfuz6vbqcakzSKQvOpnNWDwJxEGbcakm94U_aMlK7dWX9Czn5XPIzx58lK2x6IHmtgZu8_FsOw39qQ2MY-FcoRQH6ZETmPBz21rv5JYCAQZ1e-E5Tb5C403ocWdrL2VVnSbTwLVTWY7FHsVbCA8Po4xoSJxDKl2taomvGbD2b1A-CKdyy21duXMfp1N9ZSj5tQay5cfWTrVVeRM0WldQcqpVwn6ddvCn5QyM4oeThG9mgtI84uuFs50HbVc6lIiKGZ5XuqpAnigPDVB8bR8SHQJD4ntbyPM6iD9lzKc9jqtaIN4Fk0Dc9R8xLRuDM95FHSuDU7EGx3xYNQWY7N_stYcIwwg.BMehOUH4Yo-0eUe0A61UMElEg7VS6-PJS1oc_HtC6Ss&ApiVersion=2.0&AVOverride=1"
 $LinkChrome = "https://dl.google.com/tag/s/appguid%3D%7B8A69D345-D564-463C-AFF1-A69D9E530F96%7D%26iid%3D%7B9F293A55-20ED-B207-7171-E5BD75424375%7D%26lang%3Den%26browser%3D5%26usagestats%3D1%26appname%3DGoogle%2520Chrome%26needsadmin%3Dprefers%26ap%3Dx64-stable-statsdef_1%26brand%3DUEAD%26installdataindex%3Dempty/update2/installers/ChromeSetup.exe"
 # $LinkCleanWipedb = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21125&authkey=AFWoOZFIzXzjye8&download=1"
 # $LinkCleanWipeexe = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21124&authkey=AMC9_55tJR4xrRo&download=1"
@@ -195,35 +192,37 @@ $LinkFirefox = "https://download.mozilla.org/?product=firefox-msi-latest-ssl&os=
 $LinkForti = "https://filestore.fortinet.com/forticlient/FortiClientVPNOnlineInstaller.exe"
 # $LinkInode = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21131&authkey=AEAC3gA5F5jgqio&download=1"
 # $LinkJava6u29 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21129&authkey=AMYw05CumaCTXsA&download=1"
-# $Linkoffice = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21134&authkey=AGRSL5OBL6pMi2E&download=1"
+$Linkoffice = "https://my.microsoftpersonalcontent.com/personal/05924245912399f7/_layouts/15/download.aspx?UniqueId=912399f7-4245-2092-8005-860000000000&Translate=false&tempauth=v1e.eyJzaXRlaWQiOiJhYTliMmI2Ny05YTFmLTRiNzUtOGIwNi0zMjFjNTAxNjc4ZTgiLCJhcHBpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDA0ODE3MTBhNCIsImF1ZCI6IjAwMDAwMDAzLTAwMDAtMGZmMS1jZTAwLTAwMDAwMDAwMDAwMC9teS5taWNyb3NvZnRwZXJzb25hbGNvbnRlbnQuY29tQDkxODgwNDBkLTZjNjctNGM1Yi1iMTEyLTM2YTMwNGI2NmRhZCIsImV4cCI6IjE3MzAzNDEzNTcifQ.34WBfu3HSKE8ox-u0ymc7NHWRv--6DN0E1BGUobLiEHaszR-oaPLJ3MEYx8v4Aa12yU7NcSCnkhBCBwcRdIfL5G4-pGzBi5d3aum2_391AEWkP_SpTbpV-__KE-synUX7xHSsFxb1QHtbnmz04zvuSobluPoNOZ440DYxlmErlY8KwToIZcZDY9TVrWTHvEFi0z9DyNJHBBl3EoNGY4Qqr_USWFivXKHmnpm8JTq038CcC6wDlcAQETVquwXW3McavyW3Ivyi4_QuMGTj4B6h5QskmdvIj3DdAtWXM_6ymROdrBxCMD7gqAtqgp7Ijt0DpmJl_6WNRdh3xHVAAshQfL7_P-S-po2BCzeQAPtpD3-L3IqjKwUGft__G_EveRtwZtqMYNzEE-4ZVLRVcupDA.ac4F6eQkLl_TzIQIdsofsCZloHghQEKcD8Fk6sS7p1w&ApiVersion=2.0&AVOverride=1"
 # $Linkpdfownguard = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21132&authkey=AHkpiFXv6ANykrg&download=1"
 $Linkquery64 = "https://download.microsoft.com/download/E/C/E/ECEA1718-B83D-4406-B49D-3488EA5800EC/PowerQuery_2.62.5222.761%20(64-bit)%20[en-us].msi"
 # $Linkbrother = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21137&authkey=ABs5vN8Eqf62kPw&download=1"
 # $Linkt220 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21141&authkey=AOOyu0HYPL7DVlk&download=1"
 # $Linkt420 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21140&authkey=AClv9JMYeRCKhHk&download=1"
-# $Linkl220printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21264&authkey=ALaauWxjNremNz4&download=1"
-# $Linkl220scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21265&authkey=AKP0ZjUuZyDhHW0&download=1"
-# $Linkl350printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21138&authkey=ACLqQ2t8OAQ1WU0&download=1"
-# $Linkl350scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21139&authkey=APPi5TDGARIOphQ&download=1"
-# $Linkl360printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21142&authkey=ABHz7hTDSv_AtPI&download=1"
-# $Linkl360scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21143&authkey=AP5R0UWNHfeM5P8&download=1"
+$Linkl220printer = "https://download3.ebz.epson.net/dsc/f/03/00/13/67/27/64a25a86ca888e7156058dab40b79fd9e30a91f9/L220_x64_224JAUsHomeExportAsiaML.exe"
+$Linkl220scanner = "https://download3.ebz.epson.net/dsc/f/03/00/11/33/69/ace4320035ad6ea7317ec463f377945e2940aede/L220_WW_WIN_4014_41_S.exe"
+$Linkl350printer = "https://download3.ebz.epson.net/dsc/f/03/00/14/40/84/e12b4d028946184d24e1900a87d85bf4322bbd6a/L350_x64_15403UsHomeExportAsiaML.exe  "
+$Linkl350scanner = "https://download3.ebz.epson.net/dsc/f/03/00/11/41/05/0decbe3ea76cc96cd4785566b1416fcd90c0ff87/L210_WW_WIN_3793_42_S.exe"
+$Linkl360printer = "https://download3.ebz.epson.net/dsc/f/03/00/13/67/25/d39fa17d4f76438f5196527188a7407dc2342fbe/L360_x64_224JAHomeExportAsiaML.exe"
+$Linkl360scanner = "https://download3.ebz.epson.net/dsc/f/03/00/11/33/69/ace4320035ad6ea7317ec463f377945e2940aede/L220_WW_WIN_4014_41_S.exe"
 # $Linkl380printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21170&authkey=AIZyeI81gPcJY7M&download=1"
 # $Linkl380scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21171&authkey=ALvDDuXsYFgVgEg&download=1"
-# $Linkl405printer = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21146&authkey=ADn6f6zYSrCoHQM&download=1"
-# $Linkl405scanner = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21148&authkey=AHRjDedzWrho3Pg&download=1"
-# $Linkl1800 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21144&authkey=AOsE5pO4tuMu5Kc&download=1"
+$Linkl405printer = "https://download3.ebz.epson.net/dsc/f/03/00/13/30/55/3402bb7ad1ee45da8fbe02c4190067191976ae0f/L405_x64_25001JAHomeExportAsiaML.exe"
+$Linkl405scanner = "https://download3.ebz.epson.net/dsc/f/03/00/12/14/13/56cc5c7ee0c79191ef254cf23617f05ce6ec9e4f/EpsonScan2_L385_L386_L405_65230_41_Signed_S.exe"
+$Linkl1800 = "https://download3.ebz.epson.net/dsc/f/03/00/13/77/76/a8a9b4031a90f77fc81f66ca944fc8751e3bfd47/L1800_x64_21201UsHomeExportAsiaML.exe"
 # $Linklq2190 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21145&authkey=ADctuWUn98ds8rE&download=1"
 # $Linkrsim = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21149&authkey=AKigCx0ZHZ7iwUM&download=1"
+$Linkl3110printer = "https://download3.ebz.epson.net/dsc/f/03/00/15/53/16/9119207c1a25f939b4ac103e60da20bbf8d81ded/L18050_x64_304JAUsHomeExportAsiaML.exe"
+$Linkl18050printer = "https://download3.ebz.epson.net/dsc/f/03/00/12/46/53/a4bcfae950af717b9cbe385ca05e1ff05a3012ee/L3110_x64_26201JAUsHomeExportAsiaML.exe"
+$Linkl18050scanner = "https://download3.ebz.epson.net/dsc/f/03/00/12/14/04/ba55e96239e812dd0272654ca6bc8d81f7302cd5/EpsonScan2_L3110_65230_41_Signed_S.exe"
 # $Linkrufus = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21147&authkey=ADOAVyS42og_rkQ&download=1"
 $LinkAnydesk = "https://download.anydesk.com/AnyDesk.exe"
-# $LinkVNC = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21161&authkey=AN0hYu0Dc7KZnhg&download=1"
+$LinkVNC = "https://raw.githubusercontent.com/Rangga4869/script/refs/heads/main/tightvnc.msi"
 # $LinkChangeIP = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21122&authkey=ANtJfowqzdgDVDI&download=1"
-# $LinkFilezilla = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21163&authkey=AM3LvL_ReXu4Ias&download=1"
+$LinkFilezilla = "https://download.filezilla-project.org/client/FileZilla_3.67.1_win64_sponsored2-setup.exe"
 # $LinkTeams = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21164&authkey=AJdik-7Jt_bRrWw&download=1"
 # $LinkJavaTools = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21165&authkey=ALuPcEuJwY4_Kok&download=1"
 $LinkZoom = "https://cdn.zoom.us/prod/6.2.6.49050/x64/ZoomInstallerFull.exe"
 # $LinkWin10 = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21157&authkey=AB63cu5K2C1_HLc&download=1"
-# $ActivedOffice = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21173&authkey=AN30ir6q9nH1YG4&download=1"
 # $BookmarkChrome = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21238&authkey=AEMrkXTjmn44FTY&download=1"
 # $LinkFz = "https://onedrive.live.com/download?cid=05924245912399F7&resid=5924245912399F7%21241&authkey=ALx4WAKlKNcV3Ns&download=1"
 # $LinkPowerBI = "https://onedrive.live.com/download?resid=5924245912399F7%21294&authkey=!AJDEuX2FSYcMnMk&download=1"
@@ -439,8 +438,8 @@ $script = {
 
     New-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Main" -Name "Enable Browser Extensions" -Value "No" -Type String -Force | Out-Null
     
-    cmd.exe /c net user MDSLUSER Matahari123 /add
-    cmd.exe /c localgroup "remote desktop users" MDSLUSER /add
+    # cmd.exe /c net user MDSLUSER Matahari123 /add
+    # cmd.exe /c localgroup "remote desktop users" MDSLUSER /add
     cmd.exe /c net accounts /maxpwage:unlimited
     
     # Enable specific firewall rules by DisplayName
@@ -1357,46 +1356,15 @@ $Office.Add_Click(
     {
         clear-host
         Show-Copyright
-        
         $Apps = 'Install Microsoft Office 2013 for 64bit'
         $Driver = 'Office2013.zip'
         $Driver2 = 'setup.exe'
-        $Linkoffice = "http://yourdownloadlink.com/Office2013.zip" # Replace with actual download link
-        $FileFolder = "C:\YourDownloadFolder" # Replace with your actual folder path
-        
-        # Show popup for download instructions
-        $Linkoffice = "your_link_here"
-
-        # Create the message text
-        $messageText = @"
-        Please download the file from the link:
-                
-        $Linkoffice
-                
-        and copy/move it to the folder D:\SourceIT.
-        Click OK once the download is complete.
-
-        ( Silakan unduh file dari tautan tersebut dan 
-        salin/pindahkan ke folder D:\SourceIT. 
-        Klik OK jika unduhan sudah selesai. )
-"@
-        
-        # Show the message box
-        [System.Windows.Forms.MessageBox]::Show(
-            $messageText,
-            "Download Notification",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Information
-        )
-
-        Write-Host "Please wait, downloading file" $Apps "size file : 667.54 MB"
-        Expand-Archive -Path "$FileFolder\$Driver" -DestinationPath "$FileFolder\Office2013"
-        
-        # Start the setup process with confirmation
-        [System.Windows.Forms.MessageBox]::Show("Download complete. Starting installation process.", "Installation Notification", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-        Start-Process -FilePath "$FileFolder\Office2013\$Driver2" -WorkingDirectory "$FileFolder\Office2013" -Wait
-        
-        Show-Footer
+            Write-Host "Mohon tunggu, file sedang di download " $Apps "size file : 667.54 MB" 
+            invoke-webrequest -uri $Linkoffice -outfile $FileFolder\$Driver
+            Write-Host "Download" $Apps "Success. Mohon tunggu, sedang proses menjalankan file" $Apps
+            expand-archive -path $FileFolder\$Driver $FileFolder\Office2013
+            start-process -FilePath $Driver2 -WorkingDirectory $FileFolder\Office2013 -wait
+            Show-Footerd
     } )
             
 $PdfOwnGuard.Add_Click( 
@@ -1474,12 +1442,37 @@ $ActiveOffice.Add_Click(
         clear-host 
         Show-Copyright
         $Apps = 'Actived Office 2013'
-        $Driver = 'ActivedOffice.bat'
-            Write-Host "Mohon tunggu, file sedang di download " $Apps "size file : 371 kB" 
-            invoke-webrequest -uri $ActivedOffice -outfile $FileFolder\$Driver
-            Write-Host "Download" $Apps "Success. Mohon tunggu, sedang proses menjalankan file" $Apps 
-            start-process -FilePath $Driver -WorkingDirectory $FileFolder -wait
-            remove-item -path $FileFolder\$Driver -recurse 
+        # Specify cscript path
+            $cscript = "C:\Windows\System32\cscript.exe"
+            $ospp = "C:\Program Files\Microsoft Office\Office15\OSPP.VBS"
+
+            # Check if OSPP.VBS exists
+            if (!(Test-Path $ospp)) {
+                Write-Host "OSPP.VBS not found. Please verify Office installation path."
+                exit
+            }
+
+            # Get the current Office license status and extract the key
+            $status = & $cscript $ospp /dstatus | Out-String
+            $key = [regex]::Match($status, "Last 5 characters of installed product key: (.{5})").Groups[1].Value
+
+            if ($key) {
+                # Remove spaces from the key
+                $key = $key -replace '\s',''
+                
+                Write-Host "Found key: $key"
+                
+                # Uninstall the current key
+                Write-Host "Removing current key..."
+                & $cscript $ospp /unpkey:$key
+                
+                # Install the new key
+                Write-Host "Installing new key..."
+                & $cscript $ospp /inpkey:3DYND-9DTQV-PRCDC-MCC8P-8W9MG
+            } else {
+                Write-Host "No product key found"
+            }
+
             Show-Footer
     } )
                 
@@ -2365,7 +2358,7 @@ $other.Add_Click(
                 Show-Copyright
              } )
                
-             $CheckDisk.Add_Click({ 
+        $CheckDisk.Add_Click({ 
                 Clear-Host 
                 Show-Copyright
                 $Apps = "Check Disk"
@@ -2408,88 +2401,145 @@ $other.Add_Click(
                 clear-host 
                 Show-Copyright
                 $Apps = "Deep Clean Up"
-                write-Host "Mohon Tunggu sedang Deep CleanUp"
-                $user = quser | Select-Object -Skip 1 | ForEach-Object { $_ -split '\s+' } | Where-Object { $_ -ne '' } | Select-Object -First 1
-                $NewUser = $user -replace ">", ""
-                # Define paths to cleanup
-                $cleanupPaths = @(
-                    "C:\Windows\Temp\*",
-                    "$Loc_Appdata\Local\Temp\*",
-                    "C:\Windows\Prefetch\*",
-                    "C:\Windows\SoftwareDistribution\Download\*",
-                    "C:\Windows\Logs\CBS\*"
-                )
-                                
-                # Perform disk cleanup
-                foreach ($path in $cleanupPaths) {
+                # Requires -RunAsAdministrator
+
+                function Show-Banner {
+                    Write-Host "=================================" -ForegroundColor Cyan
+                    Write-Host "       Windows Deep Cleanup       " -ForegroundColor Cyan
+                    Write-Host "=================================" -ForegroundColor Cyan
+                    Write-Host ""
+                }
+
+                function Show-Footer {
+                    Write-Host ""
+                    Write-Host "=================================" -ForegroundColor Cyan
+                    Write-Host "         Cleanup Complete         " -ForegroundColor Cyan
+                    Write-Host "=================================" -ForegroundColor Cyan
+                }
+
+                function Start-DeepCleanup {
+                    # Get current user
                     try {
-                        Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
-                        Write-Host "Removed items from $path"
+                        $currentUser = (Get-WmiObject -Class Win32_ComputerSystem).Username
+                        Write-Host "Running cleanup for user: $currentUser" -ForegroundColor Green
                     }
                     catch {
-                        Write-Host "Failed to remove items from $path"
+                        Write-Warning "Could not determine current user. Continuing anyway..."
+                    }
+
+                    # Define cleanup paths with environment variables
+                    $Loc_Appdata = $env:LOCALAPPDATA
+                    $cleanupPaths = @(
+                        "$env:windir\Temp\*"
+                        "$Loc_Appdata\Temp\*"
+                        "$env:windir\Prefetch\*"
+                        "$env:windir\SoftwareDistribution\Download\*"
+                        "$env:windir\Logs\CBS\*"
+                    )
+
+                    # Basic file cleanup
+                    Write-Host "`nPerforming basic file cleanup..." -ForegroundColor Yellow
+                    foreach ($path in $cleanupPaths) {
+                        try {
+                            if (Test-Path $path) {
+                                Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
+                                Write-Host "Successfully cleaned: $path" -ForegroundColor Green
+                            }
+                        }
+                        catch {
+                            Write-Warning "Failed to clean: $path`nError: $($_.Exception.Message)"
+                        }
+                    }
+
+                    # Advanced Disk Cleanup
+                    Write-Host "`nInitiating Advanced Disk Cleanup..." -ForegroundColor Yellow
+                    $SageSet = "StateFlags0099"
+                    $Base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\"
+                    
+                    $Locations = @(
+                        "Active Setup Temp Folders"
+                        "BranchCache"
+                        "Downloaded Program Files"
+                        "GameNewsFiles"
+                        "GameStatisticsFiles"
+                        "GameUpdateFiles"
+                        "Internet Cache Files"
+                        "Memory Dump Files"
+                        "Offline Pages Files"
+                        "Old ChkDsk Files"
+                        "D3D Shader Cache"
+                        "Delivery Optimization Files"
+                        "Diagnostic Data Viewer database files"
+                        "Service Pack Cleanup"
+                        "Setup Log Files"
+                        "System error memory dump files"
+                        "System error minidump files"
+                        "Temporary Files"
+                        "Temporary Setup Files"
+                        "Temporary Sync Files"
+                        "Thumbnail Cache"
+                        "Update Cleanup"
+                        "Upgrade Discarded Files"
+                        "User file versions"
+                        "Windows Defender"
+                        "Windows Error Reporting Archive Files"
+                        "Windows Error Reporting Queue Files"
+                        "Windows Error Reporting System Archive Files"
+                        "Windows Error Reporting System Queue Files"
+                        "Windows ESD installation files"
+                        "Windows Upgrade Log Files"
+                    )
+
+                    # Set cleanup flags
+                    Write-Host "Setting cleanup flags..." -ForegroundColor Yellow
+                    foreach ($Location in $Locations) {
+                        try {
+                            Set-ItemProperty -Path $($Base + $Location) -Name $SageSet -Type DWORD -Value 2 -ErrorAction SilentlyContinue
+                        }
+                        catch {
+                            Write-Warning "Failed to set flag for: $Location"
+                        }
+                    }
+
+                    # Run Disk Cleanup
+                    try {
+                        Write-Host "Running Disk Cleanup utility..." -ForegroundColor Yellow
+                        $CleanupArgs = "/sagerun:$([string]([int]$SageSet.Substring($SageSet.Length-4)))"
+                        Start-Process -Wait "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $CleanupArgs
+                        Write-Host "Disk Cleanup completed successfully" -ForegroundColor Green
+                    }
+                    catch {
+                        Write-Warning "Disk Cleanup encountered an error: $($_.Exception.Message)"
+                    }
+
+                    # Cleanup Registry Flags
+                    Write-Host "`nCleaning up registry flags..." -ForegroundColor Yellow
+                    foreach ($Location in $Locations) {
+                        try {
+                            Remove-ItemProperty -Path $($Base + $Location) -Name $SageSet -Force -ErrorAction SilentlyContinue
+                        }
+                        catch {
+                            Write-Warning "Failed to remove registry flag for: $Location"
+                        }
                     }
                 }
-                # Run Windows Disk Cleanup utility
-                Start-Process -Wait -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:1"
-                Clear-Host
-                write-Host "Mohon Tunggu sedang Deep CleanUp"
-                $SageSet = "StateFlags0099"
-                $Base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\"
-                $Locations = @(
-                    "Active Setup Temp Folders"
-                    "BranchCache"
-                    "Downloaded Program Files"
-                    "GameNewsFiles"
-                    "GameStatisticsFiles"
-                    "GameUpdateFiles"
-                    "Internet Cache Files"
-                    "Memory Dump Files"
-                    "Offline Pages Files"
-                    "Old ChkDsk Files"
-                    "D3D Shader Cache"
-                    "Delivery Optimization Files"
-                    "Diagnostic Data Viewer database files"
-                    #"Previous Installations"
-                    #"Recycle Bin"
-                    "Service Pack Cleanup"
-                    "Setup Log Files"
-                    "System error memory dump files"
-                    "System error minidump files"
-                    "Temporary Files"
-                    "Temporary Setup Files"
-                    "Temporary Sync Files"
-                    "Thumbnail Cache"
-                    "Update Cleanup"
-                    "Upgrade Discarded Files"
-                    "User file versions"
-                    "Windows Defender"
-                    "Windows Error Reporting Archive Files"
-                    "Windows Error Reporting Queue Files"
-                    "Windows Error Reporting System Archive Files"
-                    "Windows Error Reporting System Queue Files"
-                    "Windows ESD installation files"
-                    "Windows Upgrade Log Files"
-                )
-            
-                # -ea silentlycontinue will supress error messages
-                ForEach ($Location in $Locations) {
-                    Set-ItemProperty -Path $($Base + $Location) -Name $SageSet -Type DWORD -Value 2 -ea silentlycontinue | Out-Null
-                }
-            
-                # Do the clean-up. Have to convert the SageSet number
-                $MyArgs = "/sagerun:$([string]([int]$SageSet.Substring($SageSet.Length-4)))"
-                Start-Process -Wait "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $MyArgs
-            
-                # Remove the Stateflags
-                ForEach ($Location in $Locations) {
-                    Remove-ItemProperty -Path $($Base + $Location) -Name $SageSet -Force -ea silentlycontinue | Out-Null
-                }
 
-                # Optional: Restart your computer if needed
-                # Restart-Computer -Force
+                # Main execution
+                try {
+                    # Check for admin privileges
+                    $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+                    if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+                        throw "This script requires administrator privileges. Please run as administrator."
+                    }
 
-                Show-Footer
+                    Show-Banner
+                    Start-DeepCleanup
+                    Show-Footer
+                }
+                catch {
+                    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+                    exit 1
+                }
             } )
                 
         $Shortcut.Add_Click( 
